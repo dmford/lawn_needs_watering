@@ -23,3 +23,15 @@ COOL_TEMP_THRESHOLD = 75
 
 HOT_DRY_TARGET = 1.50
 COOL_HUMID_TARGET = 1.00
+
+# ==================================================
+# EMAIL SETTINGS
+# ==================================================
+
+EMAIL_RECIPIENT = "david.m.ford@outlook.com"
+
+EMAIL_RECOMMENDATIONS = [
+    "needs light watering",
+    "needs watering",
+    "needs heavy watering"
+]

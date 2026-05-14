@@ -13,9 +13,11 @@
 
 import requests
 import pandas as pd
-import os
-
 from datetime import date
+import os
+import smtplib
+from email.message import EmailMessage
+
 from config import *
 
 # ==================================================
@@ -198,3 +200,52 @@ else:
 history_df.to_csv(log_file, index=False)
 
 print("\nResult logged to data/watering_history.csv")
+
+# ==================================================
+# CONDITIONAL EMAIL NOTIFICATION
+# ==================================================
+
+if recommendation in EMAIL_RECOMMENDATIONS:
+    email_address = os.environ.get("EMAIL_ADDRESS")
+    email_password = os.environ.get("EMAIL_PASSWORD")
+
+    if email_address is None or email_password is None:
+        print("\nEmail not sent: EMAIL_ADDRESS or EMAIL_PASSWORD is missing.")
+
+    else:
+        subject = "Lawn Watering Recommendation"
+
+        body = f"""
+Your lawn likely needs watering within the next 1–2 days.
+
+Recommendation: {recommendation}
+
+Recent rain, last {RECENT_RAIN_DAYS} days: {round(recent_rain, 2)} inches
+Forecast rain, next {FORECAST_DAYS} days: {round(forecast_rain, 2)} inches
+Forecast rain credit: {round(effective_forecast_rain, 2)} inches
+
+Base weekly target: {BASE_WEEKLY_TARGET} inches
+Adjusted weekly target: {adjusted_target} inches
+Target reason: {target_reason}
+
+Average high temp: {round(avg_high_temp, 1)} F
+Average dew point: {round(avg_dew_point, 1)} F
+
+Estimated water deficit: {round(water_deficit, 2)} inches
+"""
+
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = email_address
+        msg["To"] = EMAIL_RECIPIENT
+        msg.set_content(body)
+
+        with smtplib.SMTP("smtp.office365.com", 587) as server:
+            server.starttls()
+            server.login(email_address, email_password)
+            server.send_message(msg)
+
+        print("\nEmail notification sent.")
+
+else:
+    print("\nEmail not sent: lawn does not need watering.")
