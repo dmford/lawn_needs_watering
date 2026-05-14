@@ -72,6 +72,9 @@ print(weather_df)
 recent_rain = sum(rainfall[:RECENT_RAIN_DAYS])
 forecast_rain = sum(rainfall[RECENT_RAIN_DAYS:])
 
+avg_high_temp = sum(high_temps) / len(high_temps)
+avg_dew_point = sum(dew_points) / len(dew_points)
+
 print("\nRecent rainfall total:")
 print(round(recent_rain, 2), "inches")
 
@@ -86,8 +89,26 @@ effective_forecast_rain = (
     forecast_rain * FORECAST_DISCOUNT
 )
 
+if (
+    avg_high_temp >= HOT_TEMP_THRESHOLD
+    and avg_dew_point < VERY_DRY_DEW_POINT_THRESHOLD
+):
+    adjusted_target = HOT_DRY_TARGET
+    target_reason = "hot and dry conditions"
+
+elif (
+    avg_high_temp <= COOL_TEMP_THRESHOLD
+    and avg_dew_point >= HUMID_DEW_POINT_THRESHOLD
+):
+    adjusted_target = COOL_HUMID_TARGET
+    target_reason = "cool and humid conditions"
+
+else:
+    adjusted_target = BASE_WEEKLY_TARGET
+    target_reason = "normal conditions"
+
 water_deficit = (
-    BASE_WEEKLY_TARGET
+    adjusted_target
     - recent_rain
     - effective_forecast_rain
 )
@@ -116,7 +137,12 @@ print("\n==============================")
 print("LAWN WATERING RECOMMENDATION")
 print("==============================")
 
-print(f"Weekly target: {BASE_WEEKLY_TARGET} inches")
+print(f"Base weekly target: {BASE_WEEKLY_TARGET} inches")
+print(f"Adjusted weekly target: {adjusted_target} inches")
+print(f"Target reason: {target_reason}")
+print(f"Average high temp: {round(avg_high_temp, 1)} F")
+print(f"Average dew point: {round(avg_dew_point, 1)} F")
+print(f"Recent rain credit: {round(recent_rain, 2)} inches")
 print(f"Recent rain credit: {round(recent_rain, 2)} inches")
 
 print(
