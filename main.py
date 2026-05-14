@@ -13,7 +13,9 @@
 
 import requests
 import pandas as pd
+import os
 
+from datetime import date
 from config import *
 
 # ==================================================
@@ -143,7 +145,6 @@ print(f"Target reason: {target_reason}")
 print(f"Average high temp: {round(avg_high_temp, 1)} F")
 print(f"Average dew point: {round(avg_dew_point, 1)} F")
 print(f"Recent rain credit: {round(recent_rain, 2)} inches")
-print(f"Recent rain credit: {round(recent_rain, 2)} inches")
 
 print(
     f"Forecast rain credit: "
@@ -156,3 +157,44 @@ print(
 )
 
 print(f"\nRecommendation: {recommendation}")
+
+# ==================================================
+# LOG DAILY RESULT
+# ==================================================
+
+log_file = "data/watering_history.csv"
+
+today = date.today().isoformat()
+
+new_row = pd.DataFrame([{
+    "date": today,
+    "recent_rain": round(recent_rain, 3),
+    "forecast_rain": round(forecast_rain, 3),
+    "forecast_rain_credit": round(effective_forecast_rain, 3),
+    "base_target": BASE_WEEKLY_TARGET,
+    "adjusted_target": adjusted_target,
+    "target_reason": target_reason,
+    "avg_high_temp": round(avg_high_temp, 1),
+    "avg_dew_point": round(avg_dew_point, 1),
+    "water_deficit": round(water_deficit, 3),
+    "recommendation": recommendation
+}])
+
+if os.path.exists(log_file):
+    history_df = pd.read_csv(log_file)
+
+    history_df = history_df[
+        history_df["date"] != today
+    ]
+
+    history_df = pd.concat(
+        [history_df, new_row],
+        ignore_index=True
+    )
+
+else:
+    history_df = new_row
+
+history_df.to_csv(log_file, index=False)
+
+print("\nResult logged to data/watering_history.csv")
