@@ -76,6 +76,44 @@ print(weather_df)
 recent_rain = sum(rainfall[:RECENT_RAIN_DAYS])
 forecast_rain = sum(rainfall[RECENT_RAIN_DAYS:])
 
+# ==================================================
+# READ WATERING CONFIRMATIONS
+# ==================================================
+
+try:
+    confirmations_df = pd.read_csv(WATERING_CONFIRMATION_CSV_URL)
+
+    confirmations_df.columns = [
+        col.strip().lower().replace(" ", "_")
+        for col in confirmations_df.columns
+    ]
+
+    timestamp_col = confirmations_df.columns[0]
+
+    confirmations_df[timestamp_col] = pd.to_datetime(
+        confirmations_df[timestamp_col]
+    )
+
+    cutoff_date = pd.Timestamp.today().normalize() - pd.Timedelta(
+        days=RECENT_RAIN_DAYS
+    )
+
+    recent_confirmations_df = confirmations_df[
+        confirmations_df[timestamp_col] >= cutoff_date
+    ]
+
+    confirmed_watering_count = (
+        recent_confirmations_df[timestamp_col]
+        .dt.date
+        .nunique()
+    )
+
+except Exception as e:
+    confirmed_watering_count = 0
+    print(f"\nCould not read watering confirmations: {e}")
+
+confirmed_watering_credit = confirmed_watering_count * BASE_WEEKLY_TARGET
+
 avg_high_temp = sum(high_temps) / len(high_temps)
 avg_dew_point = sum(dew_points) / len(dew_points)
 
@@ -114,6 +152,7 @@ else:
 water_deficit = (
     adjusted_target
     - recent_rain
+    - confirmed_watering_credit
     - effective_forecast_rain
 )
 
@@ -147,6 +186,7 @@ print(f"Target reason: {target_reason}")
 print(f"Average high temp: {round(avg_high_temp, 1)} F")
 print(f"Average dew point: {round(avg_dew_point, 1)} F")
 print(f"Recent rain credit: {round(recent_rain, 2)} inches")
+print(f"Confirmed watering credit: {round(confirmed_watering_credit, 2)} inches")
 
 print(
     f"Forecast rain credit: "
@@ -224,6 +264,8 @@ After watering, mark it here:
 {WATERING_CONFIRMATION_LINK}
 
 Recent rain, last {RECENT_RAIN_DAYS} days: {round(recent_rain, 2)} inches
+Confirmed watering, last {RECENT_RAIN_DAYS} days: {round(confirmed_watering_credit, 2)} inches
+
 Forecast rain, next {FORECAST_DAYS} days: {round(forecast_rain, 2)} inches
 Forecast rain credit: {round(effective_forecast_rain, 2)} inches
 

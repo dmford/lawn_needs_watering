@@ -45,3 +45,5 @@ WATERING_CREDITS = {
     "needs watering": 0.70,
     "needs heavy watering": 1.25
 }
+
+WATERING_CONFIRMATION_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRU0GzmaNpsllUl2byx-BGTwV-yxLLcb6hCcmmhmmuU1UeoWciGGHhTvM14z0LezCflTtgTI-dUXIyh/pub?output=csv"
