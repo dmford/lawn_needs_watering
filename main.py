@@ -213,6 +213,7 @@ new_row = pd.DataFrame([{
     "recent_rain": round(recent_rain, 3),
     "forecast_rain": round(forecast_rain, 3),
     "forecast_rain_credit": round(effective_forecast_rain, 3),
+    "confirmed_watering_credit": round(confirmed_watering_credit, 3),
     "base_target": BASE_WEEKLY_TARGET,
     "adjusted_target": adjusted_target,
     "target_reason": target_reason,
