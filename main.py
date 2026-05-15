@@ -220,6 +220,9 @@ Recommendation: {recommendation.upper()}
 
 Your lawn likely needs watering within the next 1–2 days.
 
+After watering, mark it here:
+{WATERING_CONFIRMATION_LINK}
+
 Recent rain, last {RECENT_RAIN_DAYS} days: {round(recent_rain, 2)} inches
 Forecast rain, next {FORECAST_DAYS} days: {round(forecast_rain, 2)} inches
 Forecast rain credit: {round(effective_forecast_rain, 2)} inches

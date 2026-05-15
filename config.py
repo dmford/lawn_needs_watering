@@ -28,10 +28,20 @@ COOL_HUMID_TARGET = 1.00
 # EMAIL SETTINGS
 # ==================================================
 
-EMAIL_RECIPIENT = "david.m.ford@outlook.com"
-
 EMAIL_RECOMMENDATIONS = [
     "needs light watering",
     "needs watering",
     "needs heavy watering"
 ]
+
+# ==================================================
+# WATERING CONFIRMATION
+# ==================================================
+
+WATERING_CONFIRMATION_LINK = "https://script.google.com/macros/s/AKfycbyXiOO4LEAFZwl3jsyYZlgUlbnPTZhtCsjkZLAhR6FH-35eZWOB4y5c6ZqcTrilIpnW/exec"
+
+WATERING_CREDITS = {
+    "needs light watering": 0.30,
+    "needs watering": 0.70,
+    "needs heavy watering": 1.25
+}
