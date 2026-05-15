@@ -216,11 +216,9 @@ if recommendation in EMAIL_RECOMMENDATIONS:
         subject = "Lawn watering reminder"
 
         body = f"""
-Hi David,
+Recommendation: {recommendation.upper()}
 
 Your lawn likely needs watering within the next 1–2 days.
-
-Recommendation: {recommendation}
 
 Recent rain, last {RECENT_RAIN_DAYS} days: {round(recent_rain, 2)} inches
 Forecast rain, next {FORECAST_DAYS} days: {round(forecast_rain, 2)} inches
@@ -240,11 +238,12 @@ Estimated water deficit: {round(water_deficit, 2)} inches
 
         msg = EmailMessage()
         msg["Subject"] = subject
-        msg["From"] = email_address
+        msg["From"] = f"Lawn Mailbot <{email_address}>"
         recipient = os.environ.get("EMAIL_RECIPIENT")
 
         msg["To"] = recipient
-        msg.set_content(body)
+        msg["Reply-To"] = email_address
+        msg.set_content(body.strip())
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
