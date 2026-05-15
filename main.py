@@ -213,9 +213,11 @@ if recommendation in EMAIL_RECOMMENDATIONS:
         print("\nEmail not sent: EMAIL_ADDRESS or EMAIL_PASSWORD is missing.")
 
     else:
-        subject = "Lawn Watering Recommendation"
+        subject = "Lawn watering reminder"
 
         body = f"""
+Hi David,
+
 Your lawn likely needs watering within the next 1–2 days.
 
 Recommendation: {recommendation}
@@ -232,15 +234,19 @@ Average high temp: {round(avg_high_temp, 1)} F
 Average dew point: {round(avg_dew_point, 1)} F
 
 Estimated water deficit: {round(water_deficit, 2)} inches
+
+- Lawn Mailbot
 """
 
         msg = EmailMessage()
         msg["Subject"] = subject
         msg["From"] = email_address
-        msg["To"] = EMAIL_RECIPIENT
+        recipient = os.environ.get("EMAIL_RECIPIENT")
+
+        msg["To"] = recipient
         msg.set_content(body)
 
-        with smtplib.SMTP("smtp.office365.com", 587) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
             server.login(email_address, email_password)
             server.send_message(msg)
