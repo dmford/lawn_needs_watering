@@ -1,2 +1,3 @@
 date,recent_rain,forecast_rain,forecast_rain_credit,confirmed_watering_credit,base_target,adjusted_target,target_reason,avg_high_temp,avg_dew_point,water_deficit,recommendation
 2026-05-15,0.0,0.0,0.0,0.0,1.25,1.25,normal conditions,77.0,47.9,1.25,needs heavy watering
+2026-05-29,4.169,0.0,0.0,0.0,1.25,1.25,normal conditions,78.0,62.9,-2.919,doesn't need watering
