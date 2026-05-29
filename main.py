@@ -28,11 +28,33 @@ from config import *
 today_date = date.today()
 
 try:
-    mowing_history_df = pd.read_csv(MOWING_HISTORY_FILE)
-    mowing_history_df["date"] = pd.to_datetime(mowing_history_df["date"])
+    try:
+        mowing_history_df = pd.read_csv(MOWING_CONFIRMATION_CSV_URL)
+        mowing_date_col = "mowing_date"
+
+    except Exception:
+        mowing_history_df = pd.read_csv(MOWING_HISTORY_FILE)
+        mowing_date_col = "date"
+
+    mowing_history_df.columns = [
+        col.strip().lower().replace(" ", "_")
+        for col in mowing_history_df.columns
+    ]
+
+    mowing_history_df[mowing_date_col] = pd.to_datetime(
+        mowing_history_df[mowing_date_col],
+        errors="coerce"
+    )
+
+    mowing_history_df = mowing_history_df.dropna(
+        subset=[mowing_date_col]
+    )
+
+    if mowing_history_df.empty:
+        raise ValueError("No valid mowing dates found.")
 
     last_mow_date = (
-        mowing_history_df["date"]
+        mowing_history_df[mowing_date_col]
         .max()
         .date()
     )
@@ -551,6 +573,9 @@ Good mowing dates in extended window:
 
 Poor mowing dates in extended window:
 {extended_poor_mowing_dates}
+
+Record mowing:
+{MOWING_CONFIRMATION_LINK}
 
 - Lawn Mailbot
 """
