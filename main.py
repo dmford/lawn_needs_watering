@@ -21,6 +21,25 @@ from email.message import EmailMessage
 
 from config import *
 
+def format_date_list(date_list):
+    if len(date_list) == 0:
+        return "None"
+
+    return "\n".join(
+        f"- {single_date.strftime('%A, %B')} {single_date.day}"
+        for single_date in date_list
+    )
+
+
+def format_note_list(note_list):
+    if len(note_list) == 0:
+        return "None"
+
+    return "\n".join(
+        f"- {note}"
+        for note in note_list
+    )
+
 # ==================================================
 # PRE-WEATHER MOWING HEIGHT ESTIMATE
 # ==================================================
@@ -517,11 +536,11 @@ if watering_needed or mowing_needed:
 
     else:
         if watering_needed and mowing_needed:
-            subject = "Lawn watering and mowing reminder"
+            subject = "[Lawn] Watering Needed + Mowing Window Open"
         elif watering_needed:
-            subject = "Lawn watering reminder"
+            subject = "[Lawn] Watering Needed"
         else:
-            subject = "Lawn mowing reminder"
+            subject = "[Lawn] Mowing Window Open"
 
         body = f"""
 WATERING
@@ -544,35 +563,24 @@ After watering, mark it here:
 
 
 MOWING
-Recommendation: {mowing_recommendation.upper()}
+
+Good mowing dates:
+{format_date_list(primary_good_mowing_dates)}
+
+Poor mowing dates:
+{format_note_list(primary_poor_mowing_dates)}
+
+Extended outlook:
+Good dates:
+{format_date_list(extended_good_mowing_dates)}
+
+Poor dates:
+{format_note_list(extended_poor_mowing_dates)}
 
 Last mow date: {last_mow_date}
-Days since last mow: {days_since_last_mow}
-
-Post-mow height: {POST_MOW_HEIGHT} inches
-Preferred mow height: {PREFERRED_MOW_HEIGHT} inches
-Max recommended height: {round(MAX_RECOMMENDED_HEIGHT, 2)} inches
 Estimated current height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None} inches
-
-Estimated days until preferred mow: {days_until_preferred_mow}
-Estimated days until too tall: {days_until_too_tall}
-
-Preferred mow date: {preferred_mow_date}
-Too-tall date: {too_tall_date}
-Firm planning window: {primary_window_start_date} through {primary_window_end_date}
-Extended planning window through: {mowing_planning_end_date}
-
-Good mowing dates in firm window:
-{primary_good_mowing_dates}
-
-Poor mowing dates in firm window:
-{primary_poor_mowing_dates}
-
-Good mowing dates in extended window:
-{extended_good_mowing_dates}
-
-Poor mowing dates in extended window:
-{extended_poor_mowing_dates}
+Preferred mow height: {PREFERRED_MOW_HEIGHT} inches
+Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)} inches
 
 Record mowing:
 {MOWING_CONFIRMATION_LINK}
