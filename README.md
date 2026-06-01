@@ -1,27 +1,26 @@
 # lawn_needs_watering
 
-A Python automation project that determines whether my lawn in Louisville, KY needs watering based on recent rainfall, forecast rainfall, temperature/dew point conditions, and manually confirmed watering events.
+A Python home-automation project that determines whether a lawn likely needs watering based on recent rainfall, forecast rainfall, weather conditions, and manually confirmed watering history.
 
-The project runs automatically each morning through GitHub Actions and sends an email only when watering is recommended.
+The project automatically retrieves weather data, evaluates watering needs, checks mowing history, and sends email notifications only when action is likely useful.
+
+The workflow runs daily through GitHub Actions and is designed to solve a practical real-world maintenance problem rather than serve as a purely academic exercise.
 
 ## What It Does
 
 Each run:
 
-1. Pulls weather data from Open-Meteo for the configured latitude/longitude.
-2. Calculates rainfall from the past 7 days.
-3. Calculates forecast rainfall for the next 3 days.
-4. Applies a discounted forecast-rain credit.
-5. Adjusts the weekly watering target based on hot/dry or cool/humid conditions.
-6. Reads a published Google Sheet of confirmed watering events.
-7. Credits recent confirmed watering.
-8. Produces one of four recommendations:
-   - doesn't need watering
-   - needs light watering
-   - needs watering
-   - needs heavy watering
-9. Sends an email only if watering is recommended.
-10. Includes a one-click link to confirm watering after it is done.
+1. Pulls weather data from Open-Meteo.
+2. Calculates recent rainfall totals.
+3. Calculates forecast rainfall totals.
+4. Adjusts watering recommendations for temperature and humidity conditions.
+5. Reads confirmed watering history from Google Sheets.
+6. Reads mowing history from Google Sheets.
+7. Calculates whether watering is likely needed.
+8. Calculates whether a mowing reminder is likely useful.
+9. Generates a recommendation.
+10. Sends an email only when action is recommended.
+11. Includes one-click links for recording future lawn-care events.
 
 ## Current Model
 
@@ -93,3 +92,9 @@ Possible later improvements:
 - evapotranspiration modeling
 - dashboard/visualization
 - improved duplicate-notification suppression
+
+## Author
+
+David Ford
+
+This project was developed by David Ford with AI-assisted coding support (ChatGPT) used for debugging, documentation, workflow planning, and code review. Project design, implementation decisions, validation, interpretation, and final repository contents were reviewed and approved by the author.
