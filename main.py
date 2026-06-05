@@ -26,8 +26,64 @@ def format_date_list(date_list):
         return "None"
 
     return "\n".join(
-        f"- {single_date.strftime('%A, %B')} {single_date.day}"
+        f"- {single_date.strftime('%a, %b')} {single_date.day}"
         for single_date in date_list
+    )
+
+
+def format_note_list(note_list):
+    if len(note_list) == 0:
+        return "None"
+
+    return "\n".join(
+        f"- {note}"
+        for note in note_list
+    )
+
+
+def format_html_date_list(date_list):
+    if len(date_list) == 0:
+        return "<p>None</p>"
+
+    items = "".join(
+        f"<li>{single_date.strftime('%a, %b')} {single_date.day}</li>"
+        for single_date in date_list
+    )
+
+    return f"<ul>{items}</ul>"
+
+
+def format_html_note_list(note_list):
+    if len(note_list) == 0:
+        return "<p>None</p>"
+
+    items = "".join(
+        f"<li>{note}</li>"
+        for note in note_list
+    )
+
+    return f"<ul>{items}</ul>"
+
+
+def format_mowing_action(date_list):
+    if len(date_list) == 0:
+        return "MOW AS SOON AS WEATHER ALLOWS"
+
+    weekday_names = [
+        single_date.strftime("%A").upper()
+        for single_date in date_list
+    ]
+
+    if len(weekday_names) == 1:
+        return f"MOW {weekday_names[0]}"
+
+    if len(weekday_names) == 2:
+        return f"MOW {weekday_names[0]} OR {weekday_names[1]}"
+
+    return (
+        "MOW "
+        + ", ".join(weekday_names[:-1])
+        + f", OR {weekday_names[-1]}"
     )
 
 
@@ -536,56 +592,124 @@ if watering_needed or mowing_needed:
 
     else:
         if watering_needed and mowing_needed:
-            subject = "[Lawn] Watering Needed + Mowing Window Open"
+            subject = "[Lawn] Water + Mow"
         elif watering_needed:
-            subject = "[Lawn] Watering Needed"
+            subject = "[Lawn] Watering Required"
         else:
             subject = "[Lawn] Mowing Window Open"
 
+        watering_action_text = ""
+        watering_action_html = ""
+
+        if watering_needed:
+            watering_action_text = f"""
+WATERING REQUIRED
+
+Deficit: {round(water_deficit, 2)}" (target {adjusted_target}")
+
+After watering: {WATERING_CONFIRMATION_LINK}
+"""
+
+            watering_action_html = f"""
+<h2>WATERING REQUIRED</h2>
+<p>Deficit: {round(water_deficit, 2)}&quot; (target {adjusted_target}&quot;)</p>
+<p>After watering: <a href="{WATERING_CONFIRMATION_LINK}">Record watering</a></p>
+"""
+
+        mowing_action_text = ""
+        mowing_action_html = ""
+
+        if mowing_needed:
+            mowing_action = format_mowing_action(primary_good_mowing_dates)
+
+            mowing_action_text = f"""
+{mowing_action}
+
+Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}" (target ≤{round(MAX_RECOMMENDED_HEIGHT, 2)}")
+
+After mowing: {MOWING_CONFIRMATION_LINK}
+"""
+
+            mowing_action_html = f"""
+<h2>{mowing_action}</h2>
+<p>Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot; (target ≤{round(MAX_RECOMMENDED_HEIGHT, 2)}&quot;)</p>
+<p>After mowing: <a href="{MOWING_CONFIRMATION_LINK}">Record mowing</a></p>
+"""
+
         body = f"""
-WATERING
-Recommendation: {recommendation.upper()}
+{watering_action_text}
 
-Recent rain, last {RECENT_RAIN_DAYS} days: {round(recent_rain, 2)} inches
-Confirmed watering, last {RECENT_RAIN_DAYS} days: {round(confirmed_watering_credit, 2)} inches
+{mowing_action_text}
 
-Forecast rain, next {FORECAST_DAYS} days: {round(forecast_rain, 2)} inches
-Forecast rain credit: {round(effective_forecast_rain, 2)} inches
+--------------------
 
-Base weekly target: {BASE_WEEKLY_TARGET} inches
-Adjusted weekly target: {adjusted_target} inches
-Target reason: {target_reason}
-
-Estimated water deficit: {round(water_deficit, 2)} inches
-
-After watering, mark it here:
-{WATERING_CONFIRMATION_LINK}
-
-
-MOWING
+DETAILS
 
 Good mowing dates:
 {format_date_list(primary_good_mowing_dates)}
 
-Poor mowing dates:
+Avoid:
 {format_note_list(primary_poor_mowing_dates)}
 
-Extended outlook:
-Good dates:
+Extended good mowing dates:
 {format_date_list(extended_good_mowing_dates)}
 
-Poor dates:
+Extended avoid dates:
 {format_note_list(extended_poor_mowing_dates)}
 
-Last mow date: {last_mow_date}
-Estimated current height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None} inches
-Preferred mow height: {PREFERRED_MOW_HEIGHT} inches
-Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)} inches
+Watering:
+Recent rain: {round(recent_rain, 2)}"
+Forecast rain: {round(forecast_rain, 2)}"
+Forecast rain credit: {round(effective_forecast_rain, 2)}"
+Water deficit: {round(water_deficit, 2)}"
 
-Record mowing:
-{MOWING_CONFIRMATION_LINK}
+Mowing:
+Last mow date: {last_mow_date}
+Estimated height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}"
+Preferred height: {PREFERRED_MOW_HEIGHT}"
+Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)}"
 
 - Lawn Mailbot
+"""
+
+        html_body = f"""
+<html>
+  <body>
+    {watering_action_html}
+
+    {mowing_action_html}
+
+    <hr>
+
+    <h3>Details</h3>
+
+    <p><strong>Good mowing dates:</strong></p>
+    {format_html_date_list(primary_good_mowing_dates)}
+
+    <p><strong>Avoid:</strong></p>
+    {format_html_note_list(primary_poor_mowing_dates)}
+
+    <p><strong>Extended good mowing dates:</strong></p>
+    {format_html_date_list(extended_good_mowing_dates)}
+
+    <p><strong>Extended avoid dates:</strong></p>
+    {format_html_note_list(extended_poor_mowing_dates)}
+
+    <p><strong>Watering:</strong><br>
+    Recent rain: {round(recent_rain, 2)}&quot;<br>
+    Forecast rain: {round(forecast_rain, 2)}&quot;<br>
+    Forecast rain credit: {round(effective_forecast_rain, 2)}&quot;<br>
+    Water deficit: {round(water_deficit, 2)}&quot;</p>
+
+    <p><strong>Mowing:</strong><br>
+    Last mow date: {last_mow_date}<br>
+    Estimated height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot;<br>
+    Preferred height: {PREFERRED_MOW_HEIGHT}&quot;<br>
+    Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)}&quot;</p>
+
+    <p>- Lawn Mailbot</p>
+  </body>
+</html>
 """
 
         msg = EmailMessage()
@@ -596,6 +720,7 @@ Record mowing:
         msg["To"] = recipient
         msg["Reply-To"] = email_address
         msg.set_content(body.strip())
+        msg.add_alternative(html_body.strip(), subtype="html")
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
