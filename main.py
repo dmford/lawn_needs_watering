@@ -21,6 +21,8 @@ from email.message import EmailMessage
 
 from config import *
 
+today_date = date.today()
+
 def format_date_list(date_list):
     if len(date_list) == 0:
         return "None"
@@ -87,20 +89,39 @@ def format_mowing_action(date_list):
     )
 
 
-def format_note_list(note_list):
-    if len(note_list) == 0:
-        return "None"
+def calculate_decayed_watering_credit(watering_dates):
+    today_timestamp = pd.Timestamp.today().normalize()
 
-    return "\n".join(
-        f"- {note}"
-        for note in note_list
+    valid_dates = (
+        pd.to_datetime(watering_dates, errors="coerce")
+        .dropna()
+        .dt.normalize()
+        .drop_duplicates()
     )
+
+    total_credit = 0
+
+    for watering_date in valid_dates:
+        age_days = (today_timestamp - watering_date).days
+
+        if age_days < 0:
+            continue
+
+        if age_days >= RECENT_RAIN_DAYS:
+            continue
+
+        age_weight = (RECENT_RAIN_DAYS - age_days) / RECENT_RAIN_DAYS
+
+        total_credit += BASE_WEEKLY_TARGET * age_weight
+
+    return total_credit
 
 # ==================================================
 # PRE-WEATHER MOWING HEIGHT ESTIMATE
 # ==================================================
 
-today_date = date.today()
+active_post_mow_height = POST_MOW_HEIGHT
+active_max_recommended_height = MAX_RECOMMENDED_HEIGHT
 
 try:
     try:
@@ -128,11 +149,26 @@ try:
     if mowing_history_df.empty:
         raise ValueError("No valid mowing dates found.")
 
+    latest_mow_idx = mowing_history_df[mowing_date_col].idxmax()
+
     last_mow_date = (
-        mowing_history_df[mowing_date_col]
-        .max()
+        mowing_history_df.loc[latest_mow_idx, mowing_date_col]
         .date()
     )
+
+    if "post_mow_height" in mowing_history_df.columns:
+        latest_post_mow_height = pd.to_numeric(
+            pd.Series([
+                mowing_history_df.loc[latest_mow_idx, "post_mow_height"]
+            ]),
+            errors="coerce"
+        ).iloc[0]
+
+        if pd.notna(latest_post_mow_height):
+            active_post_mow_height = float(latest_post_mow_height)
+            active_max_recommended_height = (
+                active_post_mow_height * MAX_HEIGHT_MULTIPLIER
+            )
 
 except Exception as e:
     last_mow_date = None
@@ -153,7 +189,7 @@ else:
     ).days
 
     estimated_grass_height = (
-        POST_MOW_HEIGHT
+        active_post_mow_height
         + days_since_last_mow * DEFAULT_GRASS_GROWTH_RATE
     )
 
@@ -168,7 +204,7 @@ else:
     days_until_too_tall = max(
         0,
         ceil(
-            (MAX_RECOMMENDED_HEIGHT - estimated_grass_height)
+            (active_max_recommended_height - estimated_grass_height)
             / DEFAULT_GRASS_GROWTH_RATE
         )
     )
@@ -247,13 +283,15 @@ print("\nWeather Data:\n")
 
 print(weather_df)
 
-recent_rain = sum(rainfall[:RECENT_RAIN_DAYS])
+today_index = RECENT_RAIN_DAYS
 
-watering_forecast_start = RECENT_RAIN_DAYS
-watering_forecast_end = RECENT_RAIN_DAYS + FORECAST_DAYS
+recent_rain = sum(rainfall[:today_index + 1])
 
-mowing_forecast_start = RECENT_RAIN_DAYS
-mowing_forecast_end = RECENT_RAIN_DAYS + forecast_days_needed
+watering_forecast_start = today_index + 1
+watering_forecast_end = watering_forecast_start + FORECAST_DAYS
+
+mowing_forecast_start = today_index
+mowing_forecast_end = today_index + forecast_days_needed
 
 forecast_rain = sum(rainfall[watering_forecast_start:watering_forecast_end])
 mowing_forecast_rain = rainfall[mowing_forecast_start:mowing_forecast_end]
@@ -271,31 +309,33 @@ try:
         for col in confirmations_df.columns
     ]
 
-    timestamp_col = confirmations_df.columns[0]
+    if "watering_date" in confirmations_df.columns:
+        watering_date_col = "watering_date"
 
-    confirmations_df[timestamp_col] = pd.to_datetime(
-        confirmations_df[timestamp_col]
+        confirmations_df[watering_date_col] = pd.to_datetime(
+            confirmations_df[watering_date_col],
+            errors="coerce"
+        )
+
+    else:
+        watering_date_col = confirmations_df.columns[0]
+
+        confirmations_df[watering_date_col] = pd.to_datetime(
+            confirmations_df[watering_date_col],
+            errors="coerce"
+        )
+
+    confirmations_df = confirmations_df.dropna(
+        subset=[watering_date_col]
     )
 
-    cutoff_date = pd.Timestamp.today().normalize() - pd.Timedelta(
-        days=RECENT_RAIN_DAYS
-    )
-
-    recent_confirmations_df = confirmations_df[
-        confirmations_df[timestamp_col] >= cutoff_date
-    ]
-
-    confirmed_watering_count = (
-        recent_confirmations_df[timestamp_col]
-        .dt.date
-        .nunique()
+    confirmed_watering_credit = calculate_decayed_watering_credit(
+        confirmations_df[watering_date_col]
     )
 
 except Exception as e:
-    confirmed_watering_count = 0
+    confirmed_watering_credit = 0
     print(f"\nCould not read watering confirmations: {e}")
-
-confirmed_watering_credit = confirmed_watering_count * BASE_WEEKLY_TARGET
 
 weather_stress_end = RECENT_RAIN_DAYS + FORECAST_DAYS
 
@@ -513,8 +553,8 @@ print("==============================")
 
 print(f"Last mow date: {last_mow_date}")
 print(f"Days since last mow: {days_since_last_mow}")
-print(f"Post-mow height: {POST_MOW_HEIGHT} inches")
-print(f"Max recommended height: {round(MAX_RECOMMENDED_HEIGHT, 2)} inches")
+print(f"Post-mow height: {active_post_mow_height} inches")
+print(f"Max recommended height: {round(active_max_recommended_height, 2)} inches")
 print(f"Preferred mow height: {PREFERRED_MOW_HEIGHT} inches")
 
 print(
@@ -541,7 +581,7 @@ print(f"\nMowing recommendation: {mowing_recommendation}")
 
 log_file = "data/watering_history.csv"
 
-today = date.today().isoformat()
+today = today_date.isoformat()
 
 new_row = pd.DataFrame([{
     "date": today,
@@ -625,14 +665,14 @@ After watering: {WATERING_CONFIRMATION_LINK}
             mowing_action_text = f"""
 {mowing_action}
 
-Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}" (target ≤{round(MAX_RECOMMENDED_HEIGHT, 2)}")
+Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}" (target ≤{round(active_max_recommended_height, 2)}")
 
 After mowing: {MOWING_CONFIRMATION_LINK}
 """
 
             mowing_action_html = f"""
 <h2>{mowing_action}</h2>
-<p>Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot; (target ≤{round(MAX_RECOMMENDED_HEIGHT, 2)}&quot;)</p>
+<p>Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot; (target ≤{round(active_max_recommended_height, 2)}&quot;)</p>
 <p>After mowing: <a href="{MOWING_CONFIRMATION_LINK}">Record mowing</a></p>
 """
 
@@ -667,7 +707,11 @@ Mowing:
 Last mow date: {last_mow_date}
 Estimated height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}"
 Preferred height: {PREFERRED_MOW_HEIGHT}"
-Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)}"
+Max preferred height: {round(active_max_recommended_height, 2)}"
+
+Manual logging links:
+Watering: {WATERING_CONFIRMATION_LINK}
+Mowing: {MOWING_CONFIRMATION_LINK}
 
 - Lawn Mailbot
 """
@@ -705,7 +749,11 @@ Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)}"
     Last mow date: {last_mow_date}<br>
     Estimated height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot;<br>
     Preferred height: {PREFERRED_MOW_HEIGHT}&quot;<br>
-    Max preferred height: {round(MAX_RECOMMENDED_HEIGHT, 2)}&quot;</p>
+    Max preferred height: {round(active_max_recommended_height, 2)}&quot;</p>
+
+    <p><strong>Manual logging links:</strong><br>
+    <a href="{WATERING_CONFIRMATION_LINK}">Record watering</a><br>
+    <a href="{MOWING_CONFIRMATION_LINK}">Record mowing</a></p>
 
     <p>- Lawn Mailbot</p>
   </body>

@@ -52,7 +52,7 @@ WATERING_CONFIRMATION_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-
 # MOWING SETTINGS
 # ==================================================
 
-POST_MOW_HEIGHT = 3.2
+POST_MOW_HEIGHT = 3.0
 MAX_HEIGHT_MULTIPLIER = 1.5
 MAX_RECOMMENDED_HEIGHT = POST_MOW_HEIGHT * MAX_HEIGHT_MULTIPLIER
 
