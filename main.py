@@ -22,6 +22,18 @@ from email.message import EmailMessage
 from config import *
 
 today_date = date.today()
+WATERING_FORM_BASE_URL = (
+    "https://docs.google.com/forms/d/e/"
+    "1FAIpQLSdHwtjJ3XwA2mXQXqwbGNDJ3b1QVC0KKtju52HkLG-z_o9daA/"
+    "viewform"
+)
+
+watering_confirmation_link = (
+    f"{WATERING_FORM_BASE_URL}"
+    f"?usp=pp_url"
+    f"&entry.742209043=Yes"
+    f"&entry.1119456750={today_date.isoformat()}"
+)
 
 def format_date_list(date_list):
     if len(date_list) == 0:
@@ -647,13 +659,13 @@ WATERING REQUIRED
 
 Deficit: {round(water_deficit, 2)}" (target {adjusted_target}")
 
-After watering: {WATERING_CONFIRMATION_LINK}
+After watering: {watering_confirmation_link}
 """
 
             watering_action_html = f"""
 <h2>WATERING REQUIRED</h2>
 <p>Deficit: {round(water_deficit, 2)}&quot; (target {adjusted_target}&quot;)</p>
-<p>After watering: <a href="{WATERING_CONFIRMATION_LINK}">Record watering</a></p>
+<p>After watering: <a href="{watering_confirmation_link}">Record watering</a></p>
 """
 
         mowing_action_text = ""
@@ -710,7 +722,7 @@ Preferred height: {PREFERRED_MOW_HEIGHT}"
 Max preferred height: {round(active_max_recommended_height, 2)}"
 
 Manual logging links:
-Watering: {WATERING_CONFIRMATION_LINK}
+Watering: {watering_confirmation_link}
 Mowing: {MOWING_CONFIRMATION_LINK}
 
 - Lawn Mailbot
@@ -752,7 +764,7 @@ Mowing: {MOWING_CONFIRMATION_LINK}
     Max preferred height: {round(active_max_recommended_height, 2)}&quot;</p>
 
     <p><strong>Manual logging links:</strong><br>
-    <a href="{WATERING_CONFIRMATION_LINK}">Record watering</a><br>
+    <a href="{watering_confirmation_link}">Record watering</a><br>
     <a href="{MOWING_CONFIRMATION_LINK}">Record mowing</a></p>
 
     <p>- Lawn Mailbot</p>
