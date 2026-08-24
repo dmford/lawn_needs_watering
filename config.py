@@ -29,9 +29,7 @@ COOL_HUMID_TARGET = 1.00
 # ==================================================
 
 EMAIL_RECOMMENDATIONS = [
-    "needs light watering",
-    "needs watering",
-    "needs heavy watering"
+    "needs watering"
 ]
 
 # ==================================================
@@ -40,11 +38,12 @@ EMAIL_RECOMMENDATIONS = [
 
 WATERING_CONFIRMATION_LINK = "https://script.google.com/macros/s/AKfycbyXiOO4LEAFZwl3jsyYZlgUlbnPTZhtCsjkZLAhR6FH-35eZWOB4y5c6ZqcTrilIpnW/exec"
 
-WATERING_CREDITS = {
-    "needs light watering": 0.30,
-    "needs watering": 0.70,
-    "needs heavy watering": 1.25
-}
+SPRINKLER_INCHES_PER_HOUR = 0.50
+
+MIN_WATERING_INCHES = 0.50
+MAX_WATERING_INCHES = 2 / 3
+
+WATERING_RUNTIME_INCREMENT_MINUTES = 5
 
 WATERING_CONFIRMATION_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRU0GzmaNpsllUl2byx-BGTwV-yxLLcb6hCcmmhmmuU1UeoWciGGHhTvM14z0LezCflTtgTI-dUXIyh/pub?output=csv"
 

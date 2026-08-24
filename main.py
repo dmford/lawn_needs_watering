@@ -22,18 +22,6 @@ from email.message import EmailMessage
 from config import *
 
 today_date = date.today()
-WATERING_FORM_BASE_URL = (
-    "https://docs.google.com/forms/d/e/"
-    "1FAIpQLSdHwtjJ3XwA2mXQXqwbGNDJ3b1QVC0KKtju52HkLG-z_o9daA/"
-    "viewform"
-)
-
-watering_confirmation_link = (
-    f"{WATERING_FORM_BASE_URL}"
-    f"?usp=pp_url"
-    f"&entry.742209043=Yes"
-    f"&entry.1119456750={today_date.isoformat()}"
-)
 
 def format_date_list(date_list):
     if len(date_list) == 0:
@@ -101,32 +89,72 @@ def format_mowing_action(date_list):
     )
 
 
-def calculate_decayed_watering_credit(watering_dates):
-    today_timestamp = pd.Timestamp.today().normalize()
+def calculate_recent_watering_credit(confirmations_df):
+    today_timestamp = pd.Timestamp(today_date)
 
-    valid_dates = (
-        pd.to_datetime(watering_dates, errors="coerce")
-        .dropna()
-        .dt.normalize()
-        .drop_duplicates()
+    valid_confirmations = confirmations_df.copy()
+
+    valid_confirmations["watering_date"] = pd.to_datetime(
+        valid_confirmations["watering_date"],
+        errors="coerce",
+        format="mixed"
     )
 
-    total_credit = 0
+    valid_confirmations["watering_minutes"] = pd.to_numeric(
+        valid_confirmations["watering_minutes"],
+        errors="coerce"
+    )
 
-    for watering_date in valid_dates:
-        age_days = (today_timestamp - watering_date).days
+    valid_confirmations = valid_confirmations.dropna(
+        subset=["watering_date", "watering_minutes"]
+    )
 
-        if age_days < 0:
-            continue
+    valid_confirmations["watering_date"] = (
+        valid_confirmations["watering_date"].dt.normalize()
+    )
 
-        if age_days >= RECENT_RAIN_DAYS:
-            continue
+    window_start = today_timestamp - pd.Timedelta(
+        days=RECENT_RAIN_DAYS - 1
+    )
 
-        age_weight = (RECENT_RAIN_DAYS - age_days) / RECENT_RAIN_DAYS
+    valid_confirmations = valid_confirmations[
+        (valid_confirmations["watering_date"] >= window_start)
+        & (valid_confirmations["watering_date"] <= today_timestamp)
+    ]
 
-        total_credit += BASE_WEEKLY_TARGET * age_weight
+    total_minutes = valid_confirmations["watering_minutes"].sum()
 
-    return total_credit
+    total_inches = (
+        total_minutes / 60
+    ) * SPRINKLER_INCHES_PER_HOUR
+
+    return total_inches
+
+
+def calculate_recommended_watering_minutes(water_deficit):
+    if water_deficit < MIN_WATERING_INCHES:
+        return 0
+
+    watering_inches = min(
+        water_deficit,
+        MAX_WATERING_INCHES
+    )
+
+    raw_minutes = (
+        watering_inches
+        / SPRINKLER_INCHES_PER_HOUR
+        * 60
+    )
+
+    recommended_minutes = (
+        ceil(
+            raw_minutes
+            / WATERING_RUNTIME_INCREMENT_MINUTES
+        )
+        * WATERING_RUNTIME_INCREMENT_MINUTES
+    )
+
+    return recommended_minutes
 
 # ==================================================
 # PRE-WEATHER MOWING HEIGHT ESTIMATE
@@ -134,6 +162,8 @@ def calculate_decayed_watering_credit(watering_dates):
 
 active_post_mow_height = POST_MOW_HEIGHT
 active_max_recommended_height = MAX_RECOMMENDED_HEIGHT
+last_weed_ate = None
+weed_eating_needed = False
 
 try:
     try:
@@ -181,6 +211,20 @@ try:
             active_max_recommended_height = (
                 active_post_mow_height * MAX_HEIGHT_MULTIPLIER
             )
+
+    if "weed_ate" in mowing_history_df.columns:
+        latest_weed_ate = mowing_history_df.loc[
+            latest_mow_idx,
+            "weed_ate"
+        ]
+
+        if pd.notna(latest_weed_ate):
+            last_weed_ate = str(latest_weed_ate).strip().lower()
+
+            if last_weed_ate == "yes":
+                weed_eating_needed = False
+            elif last_weed_ate == "no":
+                weed_eating_needed = True
 
 except Exception as e:
     last_mow_date = None
@@ -297,7 +341,12 @@ print(weather_df)
 
 today_index = RECENT_RAIN_DAYS
 
-recent_rain = sum(rainfall[:today_index + 1])
+recent_window_start = today_index - (RECENT_RAIN_DAYS - 1)
+recent_window_end = today_index + 1
+
+recent_rain = sum(
+    rainfall[recent_window_start:recent_window_end]
+)
 
 watering_forecast_start = today_index + 1
 watering_forecast_end = watering_forecast_start + FORECAST_DAYS
@@ -305,60 +354,79 @@ watering_forecast_end = watering_forecast_start + FORECAST_DAYS
 mowing_forecast_start = today_index
 mowing_forecast_end = today_index + forecast_days_needed
 
-forecast_rain = sum(rainfall[watering_forecast_start:watering_forecast_end])
-mowing_forecast_rain = rainfall[mowing_forecast_start:mowing_forecast_end]
-mowing_forecast_dates = dates[mowing_forecast_start:mowing_forecast_end]
+forecast_rain = sum(
+    rainfall[watering_forecast_start:watering_forecast_end]
+)
+
+mowing_forecast_rain = rainfall[
+    mowing_forecast_start:mowing_forecast_end
+]
+
+mowing_forecast_dates = dates[
+    mowing_forecast_start:mowing_forecast_end
+]
 
 # ==================================================
 # READ WATERING CONFIRMATIONS
 # ==================================================
 
 try:
-    confirmations_df = pd.read_csv(WATERING_CONFIRMATION_CSV_URL)
+    confirmations_df = pd.read_csv(
+        WATERING_CONFIRMATION_CSV_URL
+    )
 
     confirmations_df.columns = [
         col.strip().lower().replace(" ", "_")
         for col in confirmations_df.columns
     ]
 
-    if "watering_date" in confirmations_df.columns:
-        watering_date_col = "watering_date"
+    required_watering_columns = {
+        "watering_date",
+        "watering_minutes"
+    }
 
-        confirmations_df[watering_date_col] = pd.to_datetime(
-            confirmations_df[watering_date_col],
-            errors="coerce"
-        )
-
-    else:
-        watering_date_col = confirmations_df.columns[0]
-
-        confirmations_df[watering_date_col] = pd.to_datetime(
-            confirmations_df[watering_date_col],
-            errors="coerce"
-        )
-
-    confirmations_df = confirmations_df.dropna(
-        subset=[watering_date_col]
+    missing_columns = (
+        required_watering_columns
+        - set(confirmations_df.columns)
     )
 
-    confirmed_watering_credit = calculate_decayed_watering_credit(
-        confirmations_df[watering_date_col]
+    if missing_columns:
+        raise ValueError(
+            "Watering history is missing required columns: "
+            + ", ".join(sorted(missing_columns))
+        )
+
+    confirmed_watering_credit = (
+        calculate_recent_watering_credit(
+            confirmations_df
+        )
     )
 
 except Exception as e:
     confirmed_watering_credit = 0
-    print(f"\nCould not read watering confirmations: {e}")
+    print(
+        f"\nCould not read watering confirmations: {e}"
+    )
 
-weather_stress_end = RECENT_RAIN_DAYS + FORECAST_DAYS
+weather_stress_start = recent_window_start
+weather_stress_end = watering_forecast_end
+
+weather_stress_high_temps = high_temps[
+    weather_stress_start:weather_stress_end
+]
+
+weather_stress_dew_points = dew_points[
+    weather_stress_start:weather_stress_end
+]
 
 avg_high_temp = (
-    sum(high_temps[:weather_stress_end])
-    / len(high_temps[:weather_stress_end])
+    sum(weather_stress_high_temps)
+    / len(weather_stress_high_temps)
 )
 
 avg_dew_point = (
-    sum(dew_points[:weather_stress_end])
-    / len(dew_points[:weather_stress_end])
+    sum(weather_stress_dew_points)
+    / len(weather_stress_dew_points)
 )
 
 print("\nRecent rainfall total:")
@@ -404,17 +472,17 @@ water_deficit = (
 # RECOMMENDATION
 # ==================================================
 
-if water_deficit <= 0:
+recommended_watering_minutes = (
+    calculate_recommended_watering_minutes(
+        water_deficit
+    )
+)
+
+if recommended_watering_minutes == 0:
     recommendation = "doesn't need watering"
 
-elif water_deficit < 0.30:
-    recommendation = "needs light watering"
-
-elif water_deficit < 0.70:
-    recommendation = "needs watering"
-
 else:
-    recommendation = "needs heavy watering"
+    recommendation = "needs watering"
 
 # ==================================================
 # OUTPUT RECOMMENDATION
@@ -440,6 +508,11 @@ print(
 print(
     f"Estimated water deficit: "
     f"{round(water_deficit, 2)} inches"
+)
+
+print(
+    f"Recommended sprinkler runtime: "
+    f"{recommended_watering_minutes} minutes"
 )
 
 print(f"\nRecommendation: {recommendation}")
@@ -566,6 +639,10 @@ print("==============================")
 print(f"Last mow date: {last_mow_date}")
 print(f"Days since last mow: {days_since_last_mow}")
 print(f"Post-mow height: {active_post_mow_height} inches")
+print(
+    f"Weed eating needed next mow: "
+    f"{'yes' if weed_eating_needed else 'no'}"
+)
 print(f"Max recommended height: {round(active_max_recommended_height, 2)} inches")
 print(f"Preferred mow height: {PREFERRED_MOW_HEIGHT} inches")
 
@@ -591,7 +668,12 @@ print(f"\nMowing recommendation: {mowing_recommendation}")
 # LOG DAILY RESULT
 # ==================================================
 
-log_file = "data/watering_history.csv"
+project_dir = os.path.dirname(os.path.abspath(__file__))
+log_file = os.path.join(
+    project_dir,
+    "data",
+    "watering_history.csv"
+)
 
 today = today_date.isoformat()
 
@@ -607,6 +689,7 @@ new_row = pd.DataFrame([{
     "avg_high_temp": round(avg_high_temp, 1),
     "avg_dew_point": round(avg_dew_point, 1),
     "water_deficit": round(water_deficit, 3),
+    "recommended_watering_minutes": recommended_watering_minutes,
     "recommendation": recommendation
 }])
 
@@ -643,50 +726,92 @@ if watering_needed or mowing_needed:
         print("\nEmail not sent: EMAIL_ADDRESS or EMAIL_PASSWORD is missing.")
 
     else:
-        if watering_needed and mowing_needed:
-            subject = "[Lawn] Water + Mow"
-        elif watering_needed:
-            subject = "[Lawn] Watering Required"
+        # --------------------------------------------------
+        # EMAIL SUBJECT
+        # --------------------------------------------------
+
+        if primary_good_mowing_dates:
+            if len(primary_good_mowing_dates) == 1:
+                mow_subject_dates = (
+                    primary_good_mowing_dates[0].strftime("%a")
+                )
+            else:
+                mow_subject_dates = (
+                    f"{primary_good_mowing_dates[0].strftime('%a')}"
+                    f"–{primary_good_mowing_dates[-1].strftime('%a')}"
+                )
         else:
-            subject = "[Lawn] Mowing Window Open"
+            mow_subject_dates = "Soon"
+
+        if watering_needed and mowing_needed:
+            subject = (
+                f"[Lawn] Water {recommended_watering_minutes}m"
+                f" + Mow {mow_subject_dates}"
+            )
+        elif watering_needed:
+            subject = (
+                f"[Lawn] Water {recommended_watering_minutes}m"
+            )
+        else:
+            subject = f"[Lawn] Mow {mow_subject_dates}"
+
+        # --------------------------------------------------
+        # WATERING ACTION
+        # --------------------------------------------------
 
         watering_action_text = ""
         watering_action_html = ""
 
         if watering_needed:
             watering_action_text = f"""
-WATERING REQUIRED
+WATER {recommended_watering_minutes} MINUTES
 
-Deficit: {round(water_deficit, 2)}" (target {adjusted_target}")
+Estimated deficit: {round(water_deficit, 2)}"
+Sprinkler rate: ~{SPRINKLER_INCHES_PER_HOUR}"/hour
 
-After watering: {watering_confirmation_link}
+After watering: {WATERING_CONFIRMATION_LINK}
 """
 
             watering_action_html = f"""
-<h2>WATERING REQUIRED</h2>
-<p>Deficit: {round(water_deficit, 2)}&quot; (target {adjusted_target}&quot;)</p>
-<p>After watering: <a href="{watering_confirmation_link}">Record watering</a></p>
+<h2>WATER {recommended_watering_minutes} MINUTES</h2>
+<p>Estimated deficit: {round(water_deficit, 2)}&quot;</p>
+<p>Sprinkler rate: ~{SPRINKLER_INCHES_PER_HOUR}&quot;/hour</p>
+<p>After watering: <a href="{WATERING_CONFIRMATION_LINK}">Record watering</a></p>
 """
+
+        # --------------------------------------------------
+        # MOWING ACTION
+        # --------------------------------------------------
 
         mowing_action_text = ""
         mowing_action_html = ""
 
         if mowing_needed:
-            mowing_action = format_mowing_action(primary_good_mowing_dates)
+            mowing_action = format_mowing_action(
+                primary_good_mowing_dates
+            )
 
             mowing_action_text = f"""
 {mowing_action}
 
 Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}" (target ≤{round(active_max_recommended_height, 2)}")
+Weed eating: {"YES" if weed_eating_needed else "NO"}
 
 After mowing: {MOWING_CONFIRMATION_LINK}
 """
 
             mowing_action_html = f"""
 <h2>{mowing_action}</h2>
-<p>Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot; (target ≤{round(active_max_recommended_height, 2)}&quot;)</p>
+<p>
+Height: {round(estimated_grass_height, 2) if estimated_grass_height is not None else None}&quot; (target ≤{round(active_max_recommended_height, 2)}&quot;)<br>
+Weed eating: <strong>{"YES" if weed_eating_needed else "NO"}</strong>
+</p>
 <p>After mowing: <a href="{MOWING_CONFIRMATION_LINK}">Record mowing</a></p>
 """
+
+        # --------------------------------------------------
+        # PLAIN-TEXT EMAIL BODY
+        # --------------------------------------------------
 
         body = f"""
 {watering_action_text}
@@ -711,9 +836,11 @@ Extended avoid dates:
 
 Watering:
 Recent rain: {round(recent_rain, 2)}"
+Confirmed watering: {round(confirmed_watering_credit, 2)}"
 Forecast rain: {round(forecast_rain, 2)}"
 Forecast rain credit: {round(effective_forecast_rain, 2)}"
 Water deficit: {round(water_deficit, 2)}"
+Recommended runtime: {recommended_watering_minutes} minutes
 
 Mowing:
 Last mow date: {last_mow_date}
@@ -722,11 +849,15 @@ Preferred height: {PREFERRED_MOW_HEIGHT}"
 Max preferred height: {round(active_max_recommended_height, 2)}"
 
 Manual logging links:
-Watering: {watering_confirmation_link}
+Watering: {WATERING_CONFIRMATION_LINK}
 Mowing: {MOWING_CONFIRMATION_LINK}
 
 - Lawn Mailbot
 """
+
+        # --------------------------------------------------
+        # HTML EMAIL BODY
+        # --------------------------------------------------
 
         html_body = f"""
 <html>
@@ -753,9 +884,11 @@ Mowing: {MOWING_CONFIRMATION_LINK}
 
     <p><strong>Watering:</strong><br>
     Recent rain: {round(recent_rain, 2)}&quot;<br>
+    Confirmed watering: {round(confirmed_watering_credit, 2)}&quot;<br>
     Forecast rain: {round(forecast_rain, 2)}&quot;<br>
     Forecast rain credit: {round(effective_forecast_rain, 2)}&quot;<br>
-    Water deficit: {round(water_deficit, 2)}&quot;</p>
+    Water deficit: {round(water_deficit, 2)}&quot;<br>
+    Recommended runtime: {recommended_watering_minutes} minutes</p>
 
     <p><strong>Mowing:</strong><br>
     Last mow date: {last_mow_date}<br>
@@ -764,7 +897,7 @@ Mowing: {MOWING_CONFIRMATION_LINK}
     Max preferred height: {round(active_max_recommended_height, 2)}&quot;</p>
 
     <p><strong>Manual logging links:</strong><br>
-    <a href="{watering_confirmation_link}">Record watering</a><br>
+    <a href="{WATERING_CONFIRMATION_LINK}">Record watering</a><br>
     <a href="{MOWING_CONFIRMATION_LINK}">Record mowing</a></p>
 
     <p>- Lawn Mailbot</p>
@@ -772,22 +905,35 @@ Mowing: {MOWING_CONFIRMATION_LINK}
 </html>
 """
 
+        # --------------------------------------------------
+        # SEND EMAIL
+        # --------------------------------------------------
+
         msg = EmailMessage()
         msg["Subject"] = subject
         msg["From"] = f"Lawn Mailbot <{email_address}>"
+
         recipient = os.environ.get("EMAIL_RECIPIENT")
 
         msg["To"] = recipient
         msg["Reply-To"] = email_address
         msg.set_content(body.strip())
-        msg.add_alternative(html_body.strip(), subtype="html")
+        msg.add_alternative(
+            html_body.strip(),
+            subtype="html"
+        )
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
-            server.login(email_address, email_password)
+            server.login(
+                email_address,
+                email_password
+            )
             server.send_message(msg)
 
         print("\nEmail notification sent.")
 
 else:
-    print("\nEmail not sent: no watering or mowing action needed.")
+    print(
+        "\nEmail not sent: no watering or mowing action needed."
+    )
